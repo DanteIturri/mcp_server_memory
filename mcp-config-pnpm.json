@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "MemoryServer": {
+      "command": "pnpm",
+      "args": [
+        "--dir",
+        "/home/dante/Documentos/mcp_server_memory",
+        "exec",
+        "tsx",
+        "src/index.ts"
+      ],
+      "env": {},
+      "type": "stdio"
+    }
+  }
+}
