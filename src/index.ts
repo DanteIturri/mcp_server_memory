@@ -9,7 +9,7 @@ import {
   Tool,
 } from '@modelcontextprotocol/sdk/types.js';
 
-import { Memory, MemorySearchOptions, MemoryStats } from './interfaces/index.js';
+import { Memory, MemorySearchOptions, MemoryStats, Project, ProjectStats } from './interfaces/index.js';
 
 import { config } from 'dotenv';
 config();
@@ -22,6 +22,7 @@ const __dirname = path.dirname(__filename);
 
 // Directorios donde se guardarán las memorias y configuraciones
 const MEMORIES_DIR = path.join(__dirname, 'memories');
+const PROJECTS_DIR = path.join(__dirname, 'projects');
 const CONFIG_DIR = path.join(__dirname, 'config');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'settings.json');
 const BACKUP_DIR = path.join(__dirname, 'backups');
@@ -96,6 +97,14 @@ class MemoryServer {
     }
   }
 
+  private async ensureProjectsDir(): Promise<void> {
+    try {
+      await fs.access(PROJECTS_DIR);
+    } catch {
+      await fs.mkdir(PROJECTS_DIR, { recursive: true });
+    }
+  }
+
   private async ensureBackupDir(): Promise<void> {
     try {
       await fs.access(BACKUP_DIR);
@@ -108,8 +117,16 @@ class MemoryServer {
     return `memory_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
+  private generateProjectId(): string {
+    return `project_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
   private getMemoryFilePath(id: string): string {
     return path.join(MEMORIES_DIR, `${id}.md`);
+  }
+
+  private getProjectFilePath(id: string): string {
+    return path.join(PROJECTS_DIR, `${id}.json`);
   }
 
   private formatMemoryAsMarkdown(memory: Memory): string {
@@ -173,6 +190,45 @@ size: ${memory.content.length}
       favorite: metadata.favorite || false,
       size: bodyContent.length,
     };
+  }
+
+  private async saveProject(project: Project): Promise<void> {
+    const filePath = this.getProjectFilePath(project.id);
+    await fs.writeFile(filePath, JSON.stringify(project, null, 2), 'utf-8');
+  }
+
+  private async loadProject(id: string): Promise<Project> {
+    const filePath = this.getProjectFilePath(id);
+    const content = await fs.readFile(filePath, 'utf-8');
+    return JSON.parse(content) as Project;
+  }
+
+  private async updateMemoryProjectLink(memoryId: string, oldProjectId?: string, newProjectId?: string): Promise<void> {
+    // Actualizar el proyecto anterior (remover memoria)
+    if (oldProjectId) {
+      try {
+        const oldProject = await this.loadProject(oldProjectId);
+        oldProject.memories = oldProject.memories.filter(id => id !== memoryId);
+        oldProject.updatedAt = new Date().toISOString();
+        await this.saveProject(oldProject);
+      } catch (error) {
+        console.warn(`Could not update old project ${oldProjectId}:`, error);
+      }
+    }
+
+    // Actualizar el nuevo proyecto (añadir memoria)
+    if (newProjectId) {
+      try {
+        const newProject = await this.loadProject(newProjectId);
+        if (!newProject.memories.includes(memoryId)) {
+          newProject.memories.push(memoryId);
+          newProject.updatedAt = new Date().toISOString();
+          await this.saveProject(newProject);
+        }
+      } catch (error) {
+        console.warn(`Could not update new project ${newProjectId}:`, error);
+      }
+    }
   }
 
   private async getMemoryStats(): Promise<MemoryStats> {
@@ -328,6 +384,7 @@ size: ${memory.content.length}
                 tags: { type: 'array', items: { type: 'string' }, description: 'New tags' },
                 priority: { type: 'string', enum: ['low', 'medium', 'high'], description: 'New priority' },
                 category: { type: 'string', description: 'New category' },
+                projectId: { type: 'string', description: 'Associated project ID' },
                 favorite: { type: 'boolean', description: 'Mark as favorite' },
                 archived: { type: 'boolean', description: 'Archive status' },
               },
@@ -403,6 +460,87 @@ size: ${memory.content.length}
               required: ['id', 'archived'],
             },
           },
+          {
+            name: 'create_project',
+            description: 'Create a new project to organize memories',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                name: { type: 'string', description: 'Project name' },
+                description: { type: 'string', description: 'Project description' },
+                color: { type: 'string', description: 'Project color (optional)' },
+                icon: { type: 'string', description: 'Project icon (optional)' },
+                tags: { type: 'array', items: { type: 'string' }, description: 'Project tags' },
+              },
+              required: ['name', 'description'],
+            },
+          },
+          {
+            name: 'list_projects',
+            description: 'List all projects with their statistics',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                archived: { type: 'boolean', description: 'Include archived projects' },
+                tags: { type: 'array', items: { type: 'string' }, description: 'Filter by tags' },
+              },
+            },
+          },
+          {
+            name: 'read_project',
+            description: 'Read project details and associated memories',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: 'Project ID' },
+                includeMemories: { type: 'boolean', description: 'Include memory summaries', default: true },
+              },
+              required: ['id'],
+            },
+          },
+          {
+            name: 'update_project',
+            description: 'Update project information',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: 'Project ID' },
+                name: { type: 'string', description: 'New project name' },
+                description: { type: 'string', description: 'New project description' },
+                color: { type: 'string', description: 'New project color' },
+                icon: { type: 'string', description: 'New project icon' },
+                tags: { type: 'array', items: { type: 'string' }, description: 'New project tags' },
+                archived: { type: 'boolean', description: 'Archive status' },
+              },
+              required: ['id'],
+            },
+          },
+          {
+            name: 'delete_project',
+            description: 'Delete a project (memories will be unlinked)',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: 'Project ID' },
+                confirm: { type: 'boolean', description: 'Confirmation flag', const: true },
+              },
+              required: ['id', 'confirm'],
+            },
+          },
+          {
+            name: 'list_memories_by_project',
+            description: 'List all memories linked to a specific project',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                projectId: { type: 'string', description: 'Project ID' },
+                limit: { type: 'number', description: 'Maximum number of results', default: 50 },
+                archived: { type: 'boolean', description: 'Include archived memories', default: false },
+                favorite: { type: 'boolean', description: 'Filter by favorite status' },
+              },
+              required: ['projectId'],
+            },
+          },
         ] as Tool[],
       };
     });
@@ -411,6 +549,7 @@ size: ${memory.content.length}
       const { name, arguments: args } = request.params;
 
       await this.ensureMemoriesDir();
+      await this.ensureProjectsDir();
 
       try {
         switch (name) {
@@ -434,6 +573,18 @@ size: ${memory.content.length}
             return await this.toggleFavorite(args);
           case 'archive_memory':
             return await this.archiveMemory(args);
+          case 'create_project':
+            return await this.createProject(args);
+          case 'list_projects':
+            return await this.listProjects(args);
+          case 'read_project':
+            return await this.readProject(args);
+          case 'update_project':
+            return await this.updateProject(args);
+          case 'delete_project':
+            return await this.deleteProject(args);
+          case 'list_memories_by_project':
+            return await this.listMemoriesByProject(args);
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -481,11 +632,16 @@ size: ${memory.content.length}
 
     await fs.writeFile(filePath, markdownContent, 'utf-8');
 
+    // Vincular memoria al proyecto si se especifica
+    if (projectId) {
+      await this.updateMemoryProjectLink(memory.id, undefined, projectId);
+    }
+
     return {
       content: [
         {
           type: 'text',
-          text: `✅ Memory created successfully!\n**ID:** ${memory.id}\n**Title:** ${memory.title}\n**Category:** ${memory.category}\n**Priority:** ${memory.priority}\n**File:** ${filePath}`,
+          text: `✅ Memory created successfully!\n**ID:** ${memory.id}\n**Title:** ${memory.title}\n**Category:** ${memory.category}\n**Priority:** ${memory.priority}${projectId ? `\n**Linked to Project:** ${projectId}` : ''}\n**File:** ${filePath}`,
         },
       ],
     };
@@ -600,7 +756,7 @@ size: ${memory.content.length}
   }
 
   private async updateMemory(args: any) {
-    const { id, title, content, tags, priority, category, favorite, archived } = args;
+    const { id, title, content, tags, priority, category, favorite, archived, projectId } = args;
     const filePath = this.getMemoryFilePath(id);
 
     try {
@@ -616,6 +772,7 @@ size: ${memory.content.length}
         category: category !== undefined ? category : existingMemory.category,
         favorite: favorite !== undefined ? favorite : existingMemory.favorite,
         archived: archived !== undefined ? archived : existingMemory.archived,
+        projectId: projectId !== undefined ? projectId : existingMemory.projectId,
         updatedAt: new Date().toISOString(),
         size: content !== undefined ? content.length : existingMemory.size,
       };
@@ -623,11 +780,16 @@ size: ${memory.content.length}
       const markdownContent = this.formatMemoryAsMarkdown(updatedMemory);
       await fs.writeFile(filePath, markdownContent, 'utf-8');
 
+      // Manejar cambios en la vinculación del proyecto
+      if (projectId !== undefined && projectId !== existingMemory.projectId) {
+        await this.updateMemoryProjectLink(id, existingMemory.projectId, projectId);
+      }
+
       return {
         content: [
           {
             type: 'text',
-            text: `✅ Memory updated successfully!\n**ID:** ${id}\n**Title:** ${updatedMemory.title}\n**Category:** ${updatedMemory.category}\n**Priority:** ${updatedMemory.priority}`,
+            text: `✅ Memory updated successfully!\n**ID:** ${id}\n**Title:** ${updatedMemory.title}\n**Category:** ${updatedMemory.category}\n**Priority:** ${updatedMemory.priority}${updatedMemory.projectId ? `\n**Linked to Project:** ${updatedMemory.projectId}` : ''}`,
           },
         ],
       };
@@ -914,6 +1076,317 @@ size: ${memory.content.length}
           {
             type: 'text',
             text: `❌ Error archiving memory: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+
+  // ================= PROJECT MANAGEMENT METHODS =================
+
+  private async createProject(args: any) {
+    const { name, description, color, icon, tags = [] } = args;
+    const now = new Date().toISOString();
+
+    const project: Project = {
+      id: this.generateProjectId(),
+      name,
+      description,
+      createdAt: now,
+      updatedAt: now,
+      memories: [],
+      color,
+      icon,
+      archived: false,
+      tags,
+    };
+
+    await this.saveProject(project);
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `✅ Project created successfully!\n**ID:** ${project.id}\n**Name:** ${project.name}\n**Description:** ${project.description}${color ? `\n**Color:** ${color}` : ''}${icon ? `\n**Icon:** ${icon}` : ''}`,
+        },
+      ],
+    };
+  }
+
+  private async listProjects(args: any) {
+    const { archived = false, tags: filterTags } = args;
+
+    try {
+      const files = await fs.readdir(PROJECTS_DIR);
+      const projectFiles = files.filter(file => file.endsWith('.json'));
+
+      const projects: Project[] = [];
+
+      for (const file of projectFiles) {
+        try {
+          const project = await this.loadProject(path.basename(file, '.json'));
+          
+          // Aplicar filtros
+          if (project.archived !== archived && !archived) continue;
+          
+          if (filterTags && filterTags.length > 0) {
+            const hasMatchingTag = filterTags.some((tag: string) =>
+              project.tags?.some(projectTag =>
+                projectTag.toLowerCase().includes(tag.toLowerCase())
+              )
+            );
+            if (!hasMatchingTag) continue;
+          }
+
+          projects.push(project);
+        } catch (error) {
+          console.error(`Error loading project file ${file}:`, error);
+        }
+      }
+
+      // Ordenar por fecha de actualización
+      projects.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+      const projectList = projects.map(project => {
+        const statusIcon = project.archived ? '📦' : '📁';
+        const colorIcon = project.color ? '🎨' : '';
+        const iconDisplay = project.icon ? project.icon : '';
+        
+        return `- **${project.name}** ${statusIcon} ${iconDisplay} ${colorIcon}\n  📝 ${project.description}\n  💾 ${project.memories.length} memories | 🏷️ ${project.tags?.join(', ') || 'No tags'}\n  🆔 ${project.id} | 📅 ${project.updatedAt}`;
+      }).join('\n\n');
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `# 📁 Projects (${projects.length} found)\n\n${projectList || 'No projects found.'}`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Error listing projects: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+
+  private async readProject(args: any) {
+    const { id, includeMemories = true } = args;
+
+    try {
+      const project = await this.loadProject(id);
+      
+      let memoriesInfo = '';
+      if (includeMemories && project.memories.length > 0) {
+        const memorySummaries = [];
+        for (const memoryId of project.memories.slice(0, 10)) { // Limitar a 10 para no sobrecargar
+          try {
+            const content = await fs.readFile(this.getMemoryFilePath(memoryId), 'utf-8');
+            const memory = this.parseMarkdownMemory(content);
+            const statusIcons = [];
+            if (memory.favorite) statusIcons.push('⭐');
+            if (memory.archived) statusIcons.push('📦');
+            
+            memorySummaries.push(`  - **${memory.title}** ${statusIcons.join(' ')}\n    🏷️ ${memory.tags.join(', ')} | ⚡ ${memory.priority} | 📅 ${memory.updatedAt}`);
+          } catch (error) {
+            memorySummaries.push(`  - ❌ Memory ${memoryId} (error loading)`);
+          }
+        }
+        
+        memoriesInfo = `\n\n## 📋 Associated Memories (${project.memories.length} total):\n\n${memorySummaries.join('\n\n')}`;
+        
+        if (project.memories.length > 10) {
+          memoriesInfo += `\n\n... and ${project.memories.length - 10} more memories. Use list_memories_by_project for complete list.`;
+        }
+      }
+
+      const statusIcon = project.archived ? '📦' : '📁';
+      const colorInfo = project.color ? `\n**🎨 Color:** ${project.color}` : '';
+      const iconInfo = project.icon ? `\n**${project.icon} Icon:** ${project.icon}` : '';
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `# ${project.name} ${statusIcon} ${project.icon || ''}\n\n**📝 Description:** ${project.description}\n**🆔 ID:** ${project.id}\n**💾 Memories:** ${project.memories.length}\n**🏷️ Tags:** ${project.tags?.join(', ') || 'No tags'}\n**📅 Created:** ${project.createdAt}\n**🔄 Updated:** ${project.updatedAt}${colorInfo}${iconInfo}${memoriesInfo}`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Error reading project: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+
+  private async updateProject(args: any) {
+    const { id, name, description, color, icon, tags, archived } = args;
+
+    try {
+      const existingProject = await this.loadProject(id);
+
+      const updatedProject: Project = {
+        ...existingProject,
+        name: name !== undefined ? name : existingProject.name,
+        description: description !== undefined ? description : existingProject.description,
+        color: color !== undefined ? color : existingProject.color,
+        icon: icon !== undefined ? icon : existingProject.icon,
+        tags: tags !== undefined ? tags : existingProject.tags,
+        archived: archived !== undefined ? archived : existingProject.archived,
+        updatedAt: new Date().toISOString(),
+      };
+
+      await this.saveProject(updatedProject);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `✅ Project updated successfully!\n**ID:** ${id}\n**Name:** ${updatedProject.name}\n**Description:** ${updatedProject.description}`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Error updating project: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+
+  private async deleteProject(args: any) {
+    const { id, confirm } = args;
+
+    if (!confirm) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Project deletion requires confirmation. Set confirm: true to proceed.`,
+          },
+        ],
+        isError: true,
+      };
+    }
+
+    try {
+      const project = await this.loadProject(id);
+      
+      // Desvincular todas las memorias del proyecto
+      for (const memoryId of project.memories) {
+        try {
+          const content = await fs.readFile(this.getMemoryFilePath(memoryId), 'utf-8');
+          const memory = this.parseMarkdownMemory(content);
+          
+          // Remover projectId de la memoria
+          const updatedMemory: Memory = {
+            ...memory,
+            projectId: undefined,
+            updatedAt: new Date().toISOString(),
+          };
+          
+          const markdownContent = this.formatMemoryAsMarkdown(updatedMemory);
+          await fs.writeFile(this.getMemoryFilePath(memoryId), markdownContent, 'utf-8');
+        } catch (error) {
+          console.warn(`Could not unlink memory ${memoryId}:`, error);
+        }
+      }
+      
+      // Eliminar el archivo del proyecto
+      await fs.unlink(this.getProjectFilePath(id));
+      
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `✅ Project deleted successfully!\n**Name:** ${project.name}\n**ID:** ${id}\n**Unlinked memories:** ${project.memories.length}`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Error deleting project: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+
+  private async listMemoriesByProject(args: any) {
+    const { projectId, limit = 50, archived = false, favorite } = args;
+
+    try {
+      const project = await this.loadProject(projectId);
+      const memories: Memory[] = [];
+
+      for (const memoryId of project.memories) {
+        try {
+          const content = await fs.readFile(this.getMemoryFilePath(memoryId), 'utf-8');
+          const memory = this.parseMarkdownMemory(content);
+
+          // Aplicar filtros
+          if (memory.archived !== archived && !archived) continue;
+          if (favorite !== undefined && memory.favorite !== favorite) continue;
+
+          memories.push(memory);
+        } catch (error) {
+          console.error(`Error loading memory ${memoryId}:`, error);
+        }
+      }
+
+      // Ordenar por fecha de actualización
+      memories.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+      // Aplicar límite
+      const limitedMemories = memories.slice(0, limit);
+
+      const memoryList = limitedMemories.map(memory => {
+        const statusIcons = [];
+        if (memory.favorite) statusIcons.push('⭐');
+        if (memory.archived) statusIcons.push('📦');
+        
+        const priorityIcon = memory.priority === 'high' ? '🔴' : 
+                            memory.priority === 'low' ? '🟢' : '🟡';
+        
+        return `- **${memory.title}** ${statusIcons.join(' ')}\n  📁 ${memory.category} | ${priorityIcon} ${memory.priority} | 🏷️ ${memory.tags.join(', ')}\n  🆔 ${memory.id} | 📅 ${memory.updatedAt}\n  📏 ${memory.size} chars`;
+      }).join('\n\n');
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `# 📋 Memories in Project "${project.name}" (${limitedMemories.length}/${memories.length} shown)\n\n${memoryList || 'No memories found in this project.'}`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Error listing project memories: ${error instanceof Error ? error.message : 'Unknown error'}`,
           },
         ],
         isError: true,

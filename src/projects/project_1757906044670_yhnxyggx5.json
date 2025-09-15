@@ -1,0 +1,27 @@
+{
+  "id": "project_1757906044670_yhnxyggx5",
+  "name": "DIM360 Backend",
+  "description": "Proyecto backend del sistema DIM360 desarrollado en Symfony PHP. Sistema de gestión tributaria municipal que incluye módulos de contribuyentes, personas, agentes, patrimonios, movimientos recaudatorios y integración con ARCA. Utiliza PostgreSQL como base de datos principal y Redis para caché.",
+  "createdAt": "2025-09-15T03:14:04.669Z",
+  "updatedAt": "2025-09-15T03:15:15.335Z",
+  "memories": [
+    "memory_1757906064928_eqok7xbb5",
+    "memory_1757906087223_ntc91fqxh",
+    "memory_1757906115334_3z7hi5odc"
+  ],
+  "color": "#3498db",
+  "icon": "🏛️",
+  "archived": false,
+  "tags": [
+    "symfony",
+    "php",
+    "postgresql",
+    "dim360",
+    "backend",
+    "tributario",
+    "municipal",
+    "arca",
+    "contribuyentes",
+    "redis"
+  ]
+}

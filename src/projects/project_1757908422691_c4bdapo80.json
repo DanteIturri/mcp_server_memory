@@ -1,0 +1,26 @@
+{
+  "id": "project_1757908422691_c4bdapo80",
+  "name": "DIM360 Frontend Development",
+  "description": "Proyecto para gestionar memorias relacionadas con el desarrollo del frontend DIM360, incluyendo componentes, servicios, hooks, páginas y soluciones técnicas implementadas.",
+  "createdAt": "2025-09-15T03:53:42.691Z",
+  "updatedAt": "2025-09-15T05:03:53.997Z",
+  "memories": [
+    "memory_1757908455845_ef65qs4hu",
+    "memory_1757908480618_oexoortyr",
+    "memory_1757908508198_j9mxylfj1",
+    "memory_1757910124844_bhq1ehu7o",
+    "memory_1757912633994_n4ie3o5xy"
+  ],
+  "color": "#2196F3",
+  "icon": "🚀",
+  "archived": false,
+  "tags": [
+    "frontend",
+    "react",
+    "typescript",
+    "dim360",
+    "desarrollo",
+    "componentes",
+    "servicios"
+  ]
+}
