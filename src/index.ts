@@ -10,6 +10,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 
 import { Memory, MemorySearchOptions, MemoryStats, Project, ProjectStats } from './interfaces/index.js';
+import { PDFExporter } from './utils/pdf.utils.js';
 
 import { config } from 'dotenv';
 config();
@@ -541,6 +542,38 @@ size: ${memory.content.length}
               required: ['projectId'],
             },
           },
+          {
+            name: 'export_memory_pdf',
+            description: 'Export a memory to PDF format with custom styling',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: 'ID of the memory to export' },
+                outputPath: { type: 'string', description: 'Directory path where to save the PDF file' },
+                fileName: { type: 'string', description: 'Custom filename (without extension)', default: 'memory' },
+                theme: { type: 'string', enum: ['light', 'dark', 'professional'], description: 'Visual theme for the PDF', default: 'professional' },
+                includeMetadata: { type: 'boolean', description: 'Include metadata in the export', default: true },
+              },
+              required: ['id', 'outputPath'],
+            },
+          },
+          {
+            name: 'export_memory_png',
+            description: 'Export a memory to PNG image format for visual sharing',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: 'ID of the memory to export' },
+                outputPath: { type: 'string', description: 'Directory path where to save the PNG file' },
+                fileName: { type: 'string', description: 'Custom filename (without extension)', default: 'memory' },
+                theme: { type: 'string', enum: ['light', 'dark', 'professional'], description: 'Visual theme for the PNG', default: 'light' },
+                includeMetadata: { type: 'boolean', description: 'Include metadata in the export', default: true },
+                width: { type: 'number', description: 'Image width in pixels', default: 1200 },
+                height: { type: 'number', description: 'Image height in pixels (auto if not specified)' },
+              },
+              required: ['id', 'outputPath'],
+            },
+          },
         ] as Tool[],
       };
     });
@@ -585,6 +618,10 @@ size: ${memory.content.length}
             return await this.deleteProject(args);
           case 'list_memories_by_project':
             return await this.listMemoriesByProject(args);
+          case 'export_memory_pdf':
+            return await this.exportMemoryToPDF(args);
+          case 'export_memory_png':
+            return await this.exportMemoryToPNG(args);
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -1387,6 +1424,107 @@ size: ${memory.content.length}
           {
             type: 'text',
             text: `❌ Error listing project memories: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+
+  // ================= PDF EXPORT METHODS =================
+
+  private async exportMemoryToPDF(args: any) {
+    const { id, outputPath, fileName = 'memory', theme = 'professional', includeMetadata = true } = args;
+
+    try {
+      // Leer la memoria
+      const filePath = this.getMemoryFilePath(id);
+      const content = await fs.readFile(filePath, 'utf-8');
+      const memory = this.parseMarkdownMemory(content);
+
+      // Generar nombre de archivo único
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const finalFileName = `${fileName}_${memory.id}_${timestamp}`;
+
+      // Exportar a PDF
+      const exportedPath = await PDFExporter.exportMemoryToPDF(
+        memory,
+        outputPath,
+        finalFileName,
+        {
+          theme,
+          includeMetadata,
+          format: 'A4',
+          margin: {
+            top: '20mm',
+            right: '20mm',
+            bottom: '20mm',
+            left: '20mm'
+          }
+        }
+      );
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `✅ PDF exportado exitosamente!\n**Memoria:** ${memory.title}\n**Archivo:** ${exportedPath}\n**Tema:** ${theme}\n**Metadatos incluidos:** ${includeMetadata ? 'Sí' : 'No'}\n**Tamaño:** ${memory.size} caracteres`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Error exportando a PDF: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+
+  private async exportMemoryToPNG(args: any) {
+    const { id, outputPath, fileName = 'memory', theme = 'light', includeMetadata = true, width = 1200, height } = args;
+
+    try {
+      // Leer la memoria
+      const filePath = this.getMemoryFilePath(id);
+      const content = await fs.readFile(filePath, 'utf-8');
+      const memory = this.parseMarkdownMemory(content);
+
+      // Generar nombre de archivo único
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const finalFileName = `${fileName}_${memory.id}_${timestamp}`;
+
+      // Exportar a PNG
+      const exportedPath = await PDFExporter.exportMemoryToPNG(
+        memory,
+        outputPath,
+        finalFileName,
+        {
+          theme,
+          includeMetadata,
+          width,
+          height
+        }
+      );
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `✅ PNG exportado exitosamente!\n**Memoria:** ${memory.title}\n**Archivo:** ${exportedPath}\n**Tema:** ${theme}\n**Dimensiones:** ${width}x${height || 'auto'} píxeles\n**Metadatos incluidos:** ${includeMetadata ? 'Sí' : 'No'}`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Error exportando a PNG: ${error instanceof Error ? error.message : 'Error desconocido'}`,
           },
         ],
         isError: true,
