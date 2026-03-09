@@ -1,0 +1,20 @@
+{
+  "id": "project_1759844676579_eic6ey3vz",
+  "name": "Bot-AI.Chat Analysis",
+  "description": "Análisis completo del sistema Bot-AI.Chat incluyendo arquitectura de base de datos, servicios comerciales, y funcionalidades del sistema",
+  "createdAt": "2025-10-07T13:44:36.578Z",
+  "updatedAt": "2025-10-07T13:45:11.173Z",
+  "memories": [
+    "memory_1759844711170_qb99y1fi8"
+  ],
+  "color": "#4F46E5",
+  "icon": "🤖",
+  "archived": false,
+  "tags": [
+    "bot-ai",
+    "laravel",
+    "database-analysis",
+    "saas-platform",
+    "mysql"
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "id": "project_1772743701985_zn3n9rm31",
+  "name": "Eyegazer Labs - Proof of Concept",
+  "description": "Proyecto de teclado virtual accesible con eye-tracking (control ocular). Aplicación Electron + React + TypeScript con sistema de cuadrantes, predicción de palabras híbrida (n-gramas + secuencia de cuadrantes), sugerencias API, text-to-speech, y sistema de hover con 3 taps progresivos. Diseñado para usuarios con discapacidad motora.",
+  "createdAt": "2026-03-05T20:48:21.985Z",
+  "updatedAt": "2026-03-05T20:52:33.227Z",
+  "memories": [
+    "memory_1769518645809_m8yrg0ph3",
+    "memory_1769518887848_h3b9mnuiw",
+    "memory_1772743953223_wemrj9t5o"
+  ],
+  "icon": "⌨️",
+  "archived": false,
+  "tags": [
+    "eyegazer-labs",
+    "electron",
+    "react",
+    "typescript",
+    "accessibility",
+    "eye-tracking",
+    "virtual-keyboard",
+    "word-prediction",
+    "quadrant-system"
+  ]
+}
