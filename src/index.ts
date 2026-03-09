@@ -13,7 +13,7 @@ import { Memory, MemorySearchOptions, MemoryStats, Project, ProjectStats } from 
 import { PDFExporter } from './utils/pdf.utils.js';
 
 import { config } from 'dotenv';
-config();
+config({ quiet: true });
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
