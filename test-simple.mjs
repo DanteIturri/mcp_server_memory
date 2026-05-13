@@ -7,8 +7,16 @@ async function testMarkdownToHTML() {
   console.log('🧪 Probando conversión Markdown a HTML...');
   
   try {
-    // Leer una memoria existente
-    const memoryPath = '/home/dante/Documentos/mcp_server_memory/src/memories/memory_1757801332284_85kamevci.md';
+    // Leer una memoria existente del workspace actual
+    const memoriesDir = path.join(process.cwd(), 'src', 'memories');
+    const memoryFiles = await fs.readdir(memoriesDir).catch(() => []);
+    const memoryFile = memoryFiles.find(file => file.endsWith('.md'));
+
+    if (!memoryFile) {
+      throw new Error(`No se encontró ninguna memoria en ${memoriesDir}`);
+    }
+
+    const memoryPath = path.join(memoriesDir, memoryFile);
     const content = await fs.readFile(memoryPath, 'utf-8');
     
     console.log('✅ Memoria leída exitosamente');
@@ -69,7 +77,7 @@ async function testMarkdownToHTML() {
     `;
     
     // Guardar HTML para verificar
-    const outputDir = '/home/dante/Documentos/mcp_server_memory/memory_exports';
+    const outputDir = path.join(process.cwd(), 'memory_exports');
     await fs.mkdir(outputDir, { recursive: true });
     
     const htmlPath = path.join(outputDir, 'test_memory.html');
