@@ -13,12 +13,6 @@ build/
 .env.test
 .env.production
 
-# IDE/Editor files
-.idea/
-*.swp
-*.swo
-*~
-
 
 # Logs
 logs/
@@ -48,12 +42,7 @@ memory_exports/
 # Local MCP client config examples
 mcp-config*.json
 
-# Temporary files
-tmp/
-temp/
 
-# ESLint cache
-.eslintcache
-
-# TypeScript cache
-*.tsbuildinfo
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
